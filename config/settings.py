@@ -84,16 +84,38 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.postgresql').strip()
+DB_NAME = os.getenv('DB_NAME', '').strip()
+DB_USER = os.getenv('DB_USER', '').strip()
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+DB_HOST = os.getenv('DB_HOST', 'localhost').strip()
+DB_PORT = os.getenv('DB_PORT', '5432').strip()
+DB_SSLMODE = os.getenv('DB_SSLMODE', '').strip()
+
+if 'sqlite' in DB_ENGINE.lower():
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / (DB_NAME or 'db.sqlite3'),
+        }
     }
-}
+else:
+    db_options = {}
+    if DB_SSLMODE:
+        db_options['sslmode'] = DB_SSLMODE
+
+    DATABASES = {
+        'default': {
+            'ENGINE': DB_ENGINE,
+            'NAME': DB_NAME,
+            'USER': DB_USER,
+            'PASSWORD': DB_PASSWORD,
+            'HOST': DB_HOST,
+            'PORT': DB_PORT,
+            'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+            **({'OPTIONS': db_options} if db_options else {}),
+        }
+    }
 
 
 # Password validation
