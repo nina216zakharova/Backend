@@ -1,2 +1,2 @@
 # Backend
-Backend code for nexus project
+Backend code for Tribe project
