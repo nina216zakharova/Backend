@@ -20,6 +20,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'title',
+            'goal',
             'description',
             'creator',
             'capacity',
