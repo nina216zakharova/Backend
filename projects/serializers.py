@@ -34,3 +34,18 @@ class ProjectSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]        
+
+
+class MyProjectsSerializer(ProjectSerializer):
+    role = serializers.SerializerMethodField()
+
+    class Meta(ProjectSerializer.Meta):
+        fields = ProjectSerializer.Meta.fields + ['role']
+
+    def get_role(self, obj):
+        user = self.context['request'].user
+
+        if obj.creator_id == user.id:
+            return 'creator'
+
+        return 'member'
