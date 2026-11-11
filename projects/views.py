@@ -7,7 +7,7 @@ from django.db import models
 from .serializers import ProjectSerializer,  MyProjectsSerializer
 
 from rest_framework.filters import SearchFilter
-
+from .permissions import IsCreatorOrReadOnly
 
 class ProjectListCreateView(generics.ListCreateAPIView):
     queryset = Project.objects.filter(status=Project.STATUS_OPEN)
@@ -24,7 +24,7 @@ class ProjectListCreateView(generics.ListCreateAPIView):
 class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsCreatorOrReadOnly]
 
 
 
