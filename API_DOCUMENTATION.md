@@ -48,6 +48,8 @@ Do not use `Bearer`; the required format is `Token`.
 }
 ```
 
+Fields:
+
 - `email`: Required. Must be unique.
 - `password`: Required. Minimum 8 characters.
 - `username`: Optional. If omitted, the email is used as the username.
@@ -183,6 +185,7 @@ Returns a list of projects using the Project response structure described below.
 ```json
 {
   "title": "Web Development Project",
+  "goal": "Build a platform for students to collaborate on projects.",
   "description": "A project built with Django and React.",
   "capacity": 4,
   "status": "open",
@@ -192,8 +195,9 @@ Returns a list of projects using the Project response structure described below.
 
 Fields:
 
-- `title`: Required.
-- `description`: Optional.
+- `title`: Required. The project title.
+- `goal`: Required. The main objective of the project.
+- `description`: Optional. Additional information about the project.
 - `capacity`: Required; minimum value is 1.
 - `status`: Optional; accepted values are `open` and `closed`.
 - `skills`: Optional; a list of existing Skill IDs.
@@ -202,7 +206,7 @@ The project creator is assigned automatically from the authenticated user. The c
 
 **Success Response:** `201 Created`
 
-Returns the created project.
+Returns the created project, including its `goal` field.
 
 ## 4.3 Get Project Details
 
@@ -218,143 +222,9 @@ Returns the details of the specified project.
 {
   "id": 5,
   "title": "Web Development Project",
+  "goal": "Build a platform for students to collaborate on projects.",
   "description": "A project built with Django and React.",
   "creator": 1,
   "capacity": 4,
   "status": "open",
-  "skills": [1, 2],
-  "created_at": "2026-11-11T10:00:00Z",
-  "updated_at": "2026-11-11T10:00:00Z"
-}
-```
-
-## 4.4 Update Project
-
-**Endpoint:** `PUT /api/projects/{id}/`
-
-**Authentication:** Required.
-
-**Permission:** Only the project creator can update the project.
-
-The same permission rule applies to `PATCH`.
-
-- `PUT`: Full update.
-- `PATCH`: Partial update.
-
-**Example PATCH Request:**
-
-```json
-{
-  "title": "Updated Project Title"
-}
-```
-
-**Success Response:** `200 OK`
-
-Returns the updated project.
-
-Requests from authenticated users who are not the project creator are denied.
-
-## 4.5 Delete Project
-
-**Endpoint:** `DELETE /api/projects/{id}/`
-
-**Authentication:** Required.
-
-**Permission:** Only the project creator can delete the project.
-
-**Success Response:** `204 No Content`
-
-Requests from users other than the creator are denied.
-
-## 4.6 Get My Projects
-
-**Endpoint:** `GET /api/projects/my/`
-
-**Authentication:** Required.
-
-Returns projects where the authenticated user is either:
-
-- The project creator.
-- A project member.
-
-Each project includes an additional `role` field.
-
-Possible values:
-
-- `creator`
-- `member`
-
-**Example Response:**
-
-```json
-[
-  {
-    "id": 5,
-    "title": "Web Development Project",
-    "description": "A project built with Django and React.",
-    "creator": 1,
-    "capacity": 4,
-    "status": "open",
-    "skills": [1, 2],
-    "created_at": "2026-11-11T10:00:00Z",
-    "updated_at": "2026-11-11T10:00:00Z",
-    "role": "creator"
-  }
-]
-```
-
----
-
-# 5. Project Response Structure
-
-The standard Project response contains:
-
-| Field | Description |
-|---|---|
-| `id` | Project ID |
-| `title` | Project title |
-| `description` | Project description |
-| `creator` | ID of the project creator |
-| `capacity` | Maximum number of members |
-| `status` | `open` or `closed` |
-| `skills` | List of Skill IDs |
-| `created_at` | Creation timestamp |
-| `updated_at` | Last update timestamp |
-
-The `creator`, `id`, `created_at`, and `updated_at` fields are read-only.
-
----
-
-# 6. HTTP Status Codes
-
-| Status Code | Description |
-|---|---|
-| `200 OK` | Request successful |
-| `201 Created` | Resource successfully created |
-| `204 No Content` | Resource successfully deleted |
-| `400 Bad Request` | Invalid request data |
-| `401 Unauthorized` | Authentication required or invalid credentials |
-| `403 Forbidden` | User does not have permission |
-| `404 Not Found` | Resource not found |
-| `405 Method Not Allowed` | HTTP method not supported |
-
----
-
-# 7. Important Notes
-
-- All authenticated requests must include the token in the `Authorization` header.
-- Only the creator of a project can update or delete it.
-- All users can retrieve project details.
-- The project list endpoint returns only projects with `open` status.
-- The `creator` field is assigned automatically when a project is created.
-- Skills must refer to existing Skill IDs.
-
-## 8. Not Yet Implemented
-
-The following APIs are not currently implemented:
-
-- Skills list/retrieval endpoint.
-- Membership request endpoints.
-
-These endpoints should not be used by the frontend until they are implemented and documented.
+  "skills
