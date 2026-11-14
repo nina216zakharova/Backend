@@ -228,3 +228,86 @@ Returns the details of the specified project.
   "capacity": 4,
   "status": "open",
   "skills
+
+
+### Explore Projects API
+
+**Endpoint:** `/api/projects/explore/`
+
+**Method:** `GET`
+
+**Description:**
+
+Returns projects for the Explore Projects page. Supports searching, filtering by project status and required skills, and ordering projects by creation date.
+
+**Authentication:** Not required (Public endpoint).
+
+#### Query Parameters
+
+| Parameter | Description | Accepted Values | Default |
+|---|---|---|---|
+| `search` | Search by project title and description | Keyword | None |
+| `status` | Filter projects by status | `open`, `closed` | `open` |
+| `skill` | Filter by required skill ID | Skill ID (integer) | None |
+| `ordering` | Sort projects by creation date | `created_at`, `-created_at` | `-created_at` |
+
+#### Examples
+
+**1. Get all open projects (default):**
+```http
+GET /api/projects/explore/
+```
+
+**2. Get closed projects:**
+```http
+GET /api/projects/explore/?status=closed
+```
+
+**3. Get newest projects:**
+```http
+GET /api/projects/explore/?ordering=-created_at
+```
+
+**4. Get oldest projects:**
+```http
+GET /api/projects/explore/?ordering=created_at
+```
+
+**5. Search projects:**
+```http
+GET /api/projects/explore/?search=Python
+```
+
+**6. Filter projects by skill:**
+```http
+GET /api/projects/explore/?skill=2
+```
+
+**7. Combine multiple filters:**
+```http
+GET /api/projects/explore/?status=open&skill=2&ordering=-created_at&search=Python
+```
+
+#### Validation
+
+- If no `status` parameter is provided, only open projects are returned.
+- The `status` parameter accepts only `open` or `closed`.
+- Invalid status values return `400 Bad Request`.
+- Projects are ordered by newest first by default.
+- Multiple query parameters can be combined in a single request.
+
+#### Response
+
+Returns a list of projects using `ProjectSerializer`.
+
+Each project contains:
+- `id`
+- `title`
+- `goal`
+- `description`
+- `creator`
+- `capacity`
+- `status`
+- `skills`
+- `created_at`
+- `updated_at`
