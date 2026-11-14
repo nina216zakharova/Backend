@@ -231,7 +231,7 @@ Returns the details of the specified project.
 }
 
 
-### Explore Projects API
+## 4.4 Explore Projects API
 
 **Endpoint:** `/api/projects/explore/`
 
