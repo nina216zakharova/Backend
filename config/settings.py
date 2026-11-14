@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-puv85^u2%0n9qy#8qw%!)ga56cz#v1a!l+z+ulda0p@o-i^(7@
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -85,15 +85,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.postgresql').strip()
-DB_NAME = os.getenv('DB_NAME', '').strip()
+DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3').strip()
+DB_NAME = os.getenv('DB_NAME', 'db.sqlite3').strip()
 DB_USER = os.getenv('DB_USER', '').strip()
 DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 DB_HOST = os.getenv('DB_HOST', 'localhost').strip()
 DB_PORT = os.getenv('DB_PORT', '5432').strip()
 DB_SSLMODE = os.getenv('DB_SSLMODE', '').strip()
 
-if 'sqlite' in DB_ENGINE.lower():
+if 'sqlite' in DB_ENGINE.lower() or not DB_USER:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
