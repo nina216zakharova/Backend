@@ -1,4 +1,4 @@
-"""
+﻿"""
 URL configuration for config project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
@@ -20,6 +20,7 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/users/', include('users.urls')),
-    path('api/', include('projects.urls')),
     path('api/applications/', include('applications.urls')),
+    path('api/projects/', include('projects.urls')),
+    path('api-auth/', include('rest_framework.urls')),
 ]

@@ -36,4 +36,3 @@ class ProjectMemberAdmin(admin.ModelAdmin):
     list_filter = ('joined_at', 'project')
     search_fields = ('project__title', 'user__username', 'user__email')
     readonly_fields = ('joined_at',)
-

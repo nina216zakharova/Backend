@@ -25,6 +25,7 @@ class Project(models.Model):
     ]
 
     title = models.CharField(max_length=255, verbose_name="Project Title")
+    goal = models.TextField(verbose_name="Project Goal")
     description = models.TextField(blank=True, verbose_name="Project Description")
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,

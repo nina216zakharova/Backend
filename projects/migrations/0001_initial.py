@@ -71,3 +71,4 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(condition=models.Q(('status__in', ['open', 'closed'])), name='project_status_valid'),
         ),
     ]
+    
