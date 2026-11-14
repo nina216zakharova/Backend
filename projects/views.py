@@ -4,9 +4,10 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 
 from .models import Project
 from django.db import models
+from rest_framework import serializers
 from .serializers import ProjectSerializer,  MyProjectsSerializer
 
-from rest_framework.filters import SearchFilter
+from rest_framework.filters import SearchFilter, OrderingFilter
 from .permissions import IsCreatorOrReadOnly
 
 class ProjectListCreateView(generics.ListCreateAPIView):
@@ -39,3 +40,42 @@ class MyProjectsView(generics.ListAPIView):
             models.Q(creator=user) | models.Q(members__user=user)
         ).distinct()
 
+class ExploreProjectsView(generics.ListAPIView):
+    serializer_class = ProjectSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    filter_backends = [SearchFilter, OrderingFilter]
+
+    search_fields = ['title', 'description']
+
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = Project.objects.all()
+
+        status = self.request.query_params.get(
+            'status',
+            Project.STATUS_OPEN
+        )
+
+        valid_statuses = [
+            Project.STATUS_OPEN,
+            Project.STATUS_CLOSED
+        ]
+
+        if status not in valid_statuses:
+            raise serializers.ValidationError({
+                'status': 'Invalid status. Choose either open or closed.'
+            })
+
+        queryset = queryset.filter(status=status)
+
+        skill_id = self.request.query_params.get('skill')
+
+        if skill_id:
+            queryset = queryset.filter(
+                skills__id=skill_id
+            ).distinct()
+
+        return queryset
