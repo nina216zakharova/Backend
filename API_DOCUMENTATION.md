@@ -229,7 +229,7 @@ Returns the details of the specified project.
   "status": "open",
   "skills"
 }
-
+```
 
 ## 4.4 Explore Projects API
 
