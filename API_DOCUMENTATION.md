@@ -227,7 +227,8 @@ Returns the details of the specified project.
   "creator": 1,
   "capacity": 4,
   "status": "open",
-  "skills
+  "skills"
+}
 
 
 ### Explore Projects API
