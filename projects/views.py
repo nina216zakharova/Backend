@@ -11,7 +11,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from .permissions import IsCreatorOrReadOnly
 
 class ProjectListCreateView(generics.ListCreateAPIView):
-    queryset = Project.objects.filter(status=Project.STATUS_OPEN)
+    queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
 
