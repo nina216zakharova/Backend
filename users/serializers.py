@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from .models import Profile
 
 User = get_user_model()
 
@@ -68,3 +69,39 @@ class UserLoginSerializer(serializers.Serializer):
 
         attrs['user'] = user
         return attrs
+
+class ProfileSerializer(serializers.ModelSerializer):
+    def validate_contact_links(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError(
+                "Contact links must be a list."
+            )
+
+        for item in value:
+            if not isinstance(item, dict):
+                raise serializers.ValidationError(
+                    "Each contact link must be an object."
+                )
+
+            for key, link in item.items():
+                if not isinstance(link, str) or not link.strip():
+                    raise serializers.ValidationError(
+                        "Contact link values cannot be empty."
+                    )
+
+                if key.lower() == "email":
+                    serializers.EmailField().run_validation(link)
+                else:
+                    serializers.URLField().run_validation(link)
+
+        return value
+    class Meta:
+        model = Profile
+        fields = [
+            'name',
+            'bio',
+            'avatar',
+            'contact_links',
+            'open_to_collaboration',
+            'open_to_mentoring',
+        ]

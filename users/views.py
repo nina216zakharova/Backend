@@ -9,7 +9,9 @@ from .serializers import (
     UserLoginSerializer,
     UserSerializer,
 )
-
+from .models import Profile
+from .serializers import ProfileSerializer
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 def users_api(request):
     """
@@ -76,16 +78,44 @@ class LoginView(APIView):
 
 
 class CurrentUserView(APIView):
-    """
-    Retrieve safe profile details for the currently authenticated user.
-    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        profile, created = Profile.objects.get_or_create(
+            user=request.user
+        )
 
+        profile_data = ProfileSerializer(profile).data
 
+        return Response({
+            "id": request.user.id,
+            "email": request.user.email,
+            "username": request.user.username,
+            "profile": profile_data
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        profile, created = Profile.objects.get_or_create(
+            user=request.user
+        )
+
+        serializer = ProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    
 class LogoutView(APIView):
     """
     Invalidate the active authentication token for the current user.
