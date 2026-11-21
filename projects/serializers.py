@@ -14,7 +14,8 @@ class ProjectSerializer(serializers.ModelSerializer):
         queryset=Skill.objects.all(),
         required=False
     )
-
+    accepted_count = serializers.SerializerMethodField()
+    
     class Meta:
         model = Project
         fields = [
@@ -24,6 +25,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             'description',
             'creator',
             'capacity',
+            'accepted_count',
             'status',
             'skills',
             'created_at',
@@ -35,7 +37,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]        
-
+    def get_accepted_count(self, obj):
+        return obj.members.count()
+    
 
 class MyProjectsSerializer(ProjectSerializer):
     role = serializers.SerializerMethodField()

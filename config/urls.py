@@ -16,11 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from projects.views import SkillListView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/users/', include('users.urls')),
     path('api/applications/', include('applications.urls')),
     path('api/projects/', include('projects.urls')),
+    path('api/skills/', SkillListView.as_view(), name='skill-list'),
     path('api-auth/', include('rest_framework.urls')),
 ]

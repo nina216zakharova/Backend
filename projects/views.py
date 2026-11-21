@@ -1,8 +1,12 @@
 from rest_framework import generics, serializers
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
-from .models import Project
+from .models import Project, Skill
 from django.db import models
-from .serializers import ProjectSerializer,  MyProjectsSerializer
+from .serializers import (
+    ProjectSerializer,
+    MyProjectsSerializer,
+    SkillSerializer,
+)
 from rest_framework.filters import SearchFilter, OrderingFilter
 from .permissions import IsCreatorOrReadOnly
 
@@ -67,11 +71,18 @@ class ExploreProjectsView(generics.ListAPIView):
 
         queryset = queryset.filter(status=status)
 
-        skill_id = self.request.query_params.get('skill')
+        skill_name = self.request.query_params.get('skill')
 
-        if skill_id:
+        if skill_name:
+            skill_name = skill_name.strip()
+
             queryset = queryset.filter(
-                skills__id=skill_id
+                models.Q(skills__name__iexact=skill_name) |
+                models.Q(skills__aliases__name__iexact=skill_name)
             ).distinct()
 
         return queryset
+
+class SkillListView(generics.ListAPIView):
+    queryset = Skill.objects.all()
+    serializer_class = SkillSerializer

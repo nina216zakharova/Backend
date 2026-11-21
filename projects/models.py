@@ -15,6 +15,19 @@ class Skill(models.Model):
     def __str__(self):
         return self.name
 
+class SkillAlias(models.Model):
+    skill = models.ForeignKey(
+        Skill,
+        on_delete=models.CASCADE,
+        related_name='aliases'
+    )
+    name = models.CharField(
+        max_length=100,
+        unique=True
+    )
+
+    def __str__(self):
+        return f"{self.name} ({self.skill.name})"
 
 class Project(models.Model):
     STATUS_OPEN = 'open'
