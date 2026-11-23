@@ -1,11 +1,13 @@
 from django.db import models
 from rest_framework import generics, permissions, status
+from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from .models import MembershipRequest
 from .permissions import IsApplicantOrProjectCreator
+from .pagination import MembershipRequestPagination
 from .serializers import (
     MembershipRequestSerializer,
     MembershipRequestCreateSerializer,
@@ -15,6 +17,11 @@ from .serializers import (
 
 class MembershipRequestListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MembershipRequestPagination
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['project__title', 'user__username', 'user__email', 'message']
+    ordering_fields = ['created_at', 'status', 'project__title']
+    ordering = ['-created_at']
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
