@@ -82,3 +82,64 @@ class GoogleAuthSerializer(serializers.Serializer):
                 "Either id_token, access_token, or code must be provided."
             )
         return attrs
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    redirect_url = serializers.URLField(required=False, allow_blank=True)
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+
+class PasswordResetValidateSerializer(serializers.Serializer):
+    uid = serializers.CharField(required=True, allow_blank=False)
+    token = serializers.CharField(required=True, allow_blank=False)
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField(required=True, allow_blank=False)
+    token = serializers.CharField(required=True, allow_blank=False)
+    new_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+        min_length=8,
+    )
+    confirm_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+        min_length=8,
+    )
+
+    def validate(self, attrs):
+        if attrs.get('new_password') != attrs.get('confirm_password'):
+            raise serializers.ValidationError({"confirm_password": ["Passwords do not match."]})
+        return attrs
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    old_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+    )
+    new_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+        min_length=8,
+    )
+    confirm_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+        min_length=8,
+    )
+
+    def validate(self, attrs):
+        if attrs.get('new_password') != attrs.get('confirm_password'):
+            raise serializers.ValidationError({"confirm_password": ["Passwords do not match."]})
+        return attrs
+
