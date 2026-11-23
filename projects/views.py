@@ -1,16 +1,24 @@
-from rest_framework import generics, serializers
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
-from .models import Project
 from django.db import models
-from .serializers import ProjectSerializer,  MyProjectsSerializer
+from django.shortcuts import get_object_or_404
+from rest_framework import generics, serializers, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.response import Response
+
+from .models import Project, ProjectMember
 from .permissions import IsCreatorOrReadOnly
+from .serializers import (
+    ProjectSerializer,
+    MyProjectsSerializer,
+    ProjectMemberSerializer,
+)
+
 
 class ProjectListCreateView(generics.ListCreateAPIView):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
-
     filter_backends = [SearchFilter]
     search_fields = ['title']
 
@@ -24,42 +32,30 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsCreatorOrReadOnly]
 
 
-
 class MyProjectsView(generics.ListAPIView):
     serializer_class = MyProjectsSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-
         return Project.objects.filter(
             models.Q(creator=user) | models.Q(members__user=user)
         ).distinct()
 
+
 class ExploreProjectsView(generics.ListAPIView):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
-
     filter_backends = [SearchFilter, OrderingFilter]
-
     search_fields = ['title', 'description']
-
     ordering_fields = ['created_at']
     ordering = ['-created_at']
 
     def get_queryset(self):
         queryset = Project.objects.all()
+        status = self.request.query_params.get('status', Project.STATUS_OPEN)
 
-        status = self.request.query_params.get(
-            'status',
-            Project.STATUS_OPEN
-        )
-
-        valid_statuses = [
-            Project.STATUS_OPEN,
-            Project.STATUS_CLOSED
-        ]
-
+        valid_statuses = [Project.STATUS_OPEN, Project.STATUS_CLOSED]
         if status not in valid_statuses:
             raise serializers.ValidationError({
                 'status': 'Invalid status. Choose either open or closed.'
@@ -68,10 +64,46 @@ class ExploreProjectsView(generics.ListAPIView):
         queryset = queryset.filter(status=status)
 
         skill_id = self.request.query_params.get('skill')
-
         if skill_id:
-            queryset = queryset.filter(
-                skills__id=skill_id
-            ).distinct()
+            queryset = queryset.filter(skills__id=skill_id).distinct()
 
         return queryset
+
+
+class ProjectMembersListView(generics.ListAPIView):
+    serializer_class = ProjectMemberSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        project_id = self.kwargs.get('pk')
+        return ProjectMember.objects.filter(project_id=project_id).select_related('user')
+
+
+class ProjectMemberDetailView(generics.DestroyAPIView):
+    """
+    Remove a member from the project or allow a member to leave.
+    If removal frees capacity on a closed project, the project automatically re-opens.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk, user_id):
+        project = get_object_or_404(Project, pk=pk)
+        member = get_object_or_404(ProjectMember, project=project, user_id=user_id)
+
+        is_creator = project.creator_id == request.user.id
+        is_self = member.user_id == request.user.id
+
+        if not is_creator and not is_self:
+            raise PermissionDenied("You are not authorized to remove this member.")
+
+        member.delete()
+
+        # Automatically reopen project if it was closed due to capacity
+        if project.status == Project.STATUS_CLOSED and project.members.count() < project.capacity:
+            project.status = Project.STATUS_OPEN
+            project.save(update_fields=['status', 'updated_at'])
+
+        return Response(
+            {"message": "Member removed from project successfully."},
+            status=status.HTTP_204_NO_CONTENT,
+        )

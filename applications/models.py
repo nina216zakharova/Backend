@@ -31,6 +31,7 @@ class MembershipRequest(models.Model):
         verbose_name="Status",
     )
     message = models.TextField(blank=True, verbose_name="Application Message")
+    response_message = models.TextField(blank=True, verbose_name="Response Message")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
