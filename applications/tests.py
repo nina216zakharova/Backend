@@ -112,7 +112,7 @@ class MembershipRequestTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Project team capacity is already full.", str(response.json()))
 
-    def test_creator_can_accept_request(self):
+    def test_creator_can_accept_request_with_response_message(self):
         req = MembershipRequest.objects.create(
             project=self.project,
             user=self.applicant,
@@ -123,16 +123,17 @@ class MembershipRequestTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.creator_token.key}")
         response = self.client.patch(
             f"/api/applications/requests/{req.id}/",
-            {"status": "accepted"},
+            {"status": "accepted", "response_message": "Welcome to our engineering team!"},
             format="json",
         )
 
         self.assertEqual(response.status_code, 200)
         req.refresh_from_db()
         self.assertEqual(req.status, MembershipRequest.STATUS_ACCEPTED)
+        self.assertEqual(req.response_message, "Welcome to our engineering team!")
         self.assertTrue(ProjectMember.objects.filter(project=self.project, user=self.applicant).exists())
 
-    def test_creator_can_reject_request(self):
+    def test_creator_can_reject_request_with_response_message(self):
         req = MembershipRequest.objects.create(
             project=self.project,
             user=self.applicant,
@@ -143,13 +144,14 @@ class MembershipRequestTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.creator_token.key}")
         response = self.client.patch(
             f"/api/applications/requests/{req.id}/",
-            {"status": "rejected"},
+            {"status": "rejected", "response_message": "Currently looking for senior members."},
             format="json",
         )
 
         self.assertEqual(response.status_code, 200)
         req.refresh_from_db()
         self.assertEqual(req.status, MembershipRequest.STATUS_REJECTED)
+        self.assertEqual(req.response_message, "Currently looking for senior members.")
         self.assertFalse(ProjectMember.objects.filter(project=self.project, user=self.applicant).exists())
 
     def test_project_automatically_closes_when_capacity_reached(self):
@@ -243,18 +245,69 @@ class MembershipRequestTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_list_requests_and_filter(self):
+    def test_membership_stats_endpoint(self):
         MembershipRequest.objects.create(
             project=self.project,
             user=self.applicant,
             status=MembershipRequest.STATUS_PENDING,
         )
 
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.applicant_token.key}")
-        response = self.client.get("/api/applications/requests/?status=pending")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.creator_token.key}")
+        response = self.client.get("/api/applications/requests/stats/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()), 1)
+        data = response.json()
+        self.assertIn("sent", data)
+        self.assertIn("received", data)
+        self.assertEqual(data["received"]["pending"], 1)
+
+    def test_list_requests_search_and_ordering(self):
+        MembershipRequest.objects.create(
+            project=self.project,
+            user=self.applicant,
+            message="Unique searchable note",
+            status=MembershipRequest.STATUS_PENDING,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.applicant_token.key}")
+        response = self.client.get("/api/applications/requests/?search=searchable")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.json().get("results", response.json())
+        self.assertEqual(len(results), 1)
+
+    def test_creator_can_remove_project_member_and_reopen_project(self):
+        self.project.capacity = 1
+        self.project.status = Project.STATUS_CLOSED
+        self.project.save()
+
+        member = ProjectMember.objects.create(project=self.project, user=self.applicant)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.creator_token.key}")
+        response = self.client.delete(f"/api/projects/{self.project.id}/members/{self.applicant.id}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(ProjectMember.objects.filter(id=member.id).exists())
+
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.status, Project.STATUS_OPEN)
+
+    def test_member_can_voluntarily_leave_project(self):
+        member = ProjectMember.objects.create(project=self.project, user=self.applicant)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.applicant_token.key}")
+        response = self.client.delete(f"/api/projects/{self.project.id}/members/{self.applicant.id}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(ProjectMember.objects.filter(id=member.id).exists())
+
+    def test_unauthorized_user_cannot_remove_member(self):
+        ProjectMember.objects.create(project=self.project, user=self.applicant)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.other_token.key}")
+        response = self.client.delete(f"/api/projects/{self.project.id}/members/{self.applicant.id}/")
+
+        self.assertEqual(response.status_code, 403)
 
     def test_project_members_list_view(self):
         ProjectMember.objects.create(project=self.project, user=self.applicant)
