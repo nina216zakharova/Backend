@@ -19,7 +19,7 @@ class UserRegistrationSerializer(serializers.Serializer):
         style={'input_type': 'password'},
         min_length=8,
     )
-    username = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    username = serializers.CharField(required=True, allow_blank=False, max_length=150,)
 
     def validate_email(self, value):
         normalized_email = value.strip().lower()
@@ -28,17 +28,20 @@ class UserRegistrationSerializer(serializers.Serializer):
         return normalized_email
 
     def validate_username(self, value):
-        if value:
-            username = value.strip()
-            if User.objects.filter(username__iexact=username).exists():
-                raise serializers.ValidationError("A user with this username already exists.")
-            return username
-        return value
+        username = value.strip()
+
+        if not username:
+            raise serializers.ValidationError("Username is required.")
+
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+
+        return username
 
     def create(self, validated_data):
         email = validated_data['email']
         password = validated_data['password']
-        username = validated_data.get('username') or email
+        username = validated_data['username']
 
         user = User.objects.create_user(
             username=username,
