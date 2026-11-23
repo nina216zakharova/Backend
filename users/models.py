@@ -51,3 +51,37 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.name or self.user.username
+
+    @property
+    def display_name(self):
+        return self.name or self.user.username
+
+    @property
+    def open_for_collaboration(self):
+        return self.open_to_collaboration
+
+    @property
+    def open_for_mentoring(self):
+        return self.open_to_mentoring
+
+    def get_contact(self, platform):
+        if isinstance(self.contact_links, dict):
+            return self.contact_links.get(platform, '')
+        if isinstance(self.contact_links, list):
+            for item in self.contact_links:
+                if isinstance(item, dict) and platform in item:
+                    return item[platform]
+        return ''
+
+    @property
+    def telegram(self):
+        return self.get_contact('telegram')
+
+    @property
+    def github(self):
+        return self.get_contact('github')
+
+    @property
+    def linkedin(self):
+        return self.get_contact('linkedin')
+
