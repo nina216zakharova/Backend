@@ -20,6 +20,7 @@ class MembershipRequestSerializer(serializers.ModelSerializer):
             'applicant_email',
             'status',
             'message',
+            'response_message',
             'created_at',
             'updated_at',
         ]
@@ -76,9 +77,11 @@ class MembershipRequestCreateSerializer(serializers.ModelSerializer):
 
 
 class MembershipRequestStatusUpdateSerializer(serializers.ModelSerializer):
+    response_message = serializers.CharField(required=False, allow_blank=True, default='')
+
     class Meta:
         model = MembershipRequest
-        fields = ['status']
+        fields = ['status', 'response_message']
 
     def validate_status(self, value):
         valid_transitions = [MembershipRequest.STATUS_ACCEPTED, MembershipRequest.STATUS_REJECTED]
@@ -88,6 +91,7 @@ class MembershipRequestStatusUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         new_status = validated_data.get('status')
+        response_msg = validated_data.get('response_message', '')
         request_user = self.context['request'].user
 
         if instance.project.creator != request_user:
@@ -102,7 +106,9 @@ class MembershipRequestStatusUpdateSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             instance.status = new_status
-            instance.save(update_fields=['status', 'updated_at'])
+            if response_msg:
+                instance.response_message = response_msg.strip()
+            instance.save(update_fields=['status', 'response_message', 'updated_at'])
 
             if new_status == MembershipRequest.STATUS_ACCEPTED:
                 project = Project.objects.select_for_update().get(pk=instance.project_id)
