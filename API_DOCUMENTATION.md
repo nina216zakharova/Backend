@@ -129,7 +129,88 @@ Invalid credentials return a validation error.
 
 The current authentication token is deleted after logout.
 
-## 3.5 API Health Check
+## 3.5 Google Authentication (Login & Signup)
+
+### 3.5.1 Google OAuth Verify & Exchange
+
+**Endpoint:** `POST /api/users/google/`
+
+**Authentication:** Not required.
+
+Seamlessly authenticates existing users or provisions new accounts via Google. Accepts a Google ID token, OAuth2 access token, or authorization code.
+
+**Request Body (ID Token - Recommended for SPA):**
+
+```json
+{
+  "id_token": "YOUR_GOOGLE_ID_TOKEN"
+}
+```
+
+**Alternative Request Bodies:**
+
+```json
+{
+  "access_token": "YOUR_GOOGLE_ACCESS_TOKEN"
+}
+```
+
+or:
+
+```json
+{
+  "code": "YOUR_GOOGLE_AUTH_CODE",
+  "redirect_uri": "http://localhost:5173/auth/callback"
+}
+```
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "token": "YOUR_AUTH_TOKEN",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "username": "user_name"
+  },
+  "is_new_user": false
+}
+```
+
+- If the user email does not exist, a new user account is automatically registered (`is_new_user: true`) with an auto-generated unique username and unusable password.
+- If the user already exists, they are authenticated directly (`is_new_user: false`).
+
+**Error Response:** `400 Bad Request`
+
+```json
+{
+  "detail": "Invalid or expired Google ID token."
+}
+```
+
+### 3.5.2 Google Login Redirect
+
+**Endpoint:** `GET /api/users/google/login/`
+
+**Authentication:** Not required.
+
+Generates the Google OAuth 2.0 consent page URL.
+
+- Calling from a browser redirects (302) to Google's sign-in screen.
+- Calling with query `?format=json` returns `{"auth_url": "https://accounts.google.com/..."}`.
+
+### 3.5.3 Google OAuth Callback
+
+**Endpoint:** `GET /api/users/google/callback/`
+
+**Authentication:** Not required.
+
+Handles the redirect from Google with `?code=...` and forwards the user to the frontend with an authentication token:
+
+`http://localhost:5173/login?token=YOUR_AUTH_TOKEN&email=user@example.com&username=user_name`
+
+## 3.6 API Health Check
 
 **Endpoint:** `GET /api/users/`
 
