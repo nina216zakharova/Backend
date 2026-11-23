@@ -1,5 +1,6 @@
 from django.db import models
 from rest_framework import generics, permissions, status
+from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
@@ -68,3 +69,46 @@ class MembershipRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
             {"message": "Membership request withdrawn successfully."},
             status=status.HTTP_204_NO_CONTENT,
         )
+
+
+class MembershipStatsView(APIView):
+    """
+    Aggregated membership request metrics for user dashboard.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        sent = MembershipRequest.objects.filter(user=user)
+        received = MembershipRequest.objects.filter(project__creator=user)
+
+        by_project = (
+            received.filter(status=MembershipRequest.STATUS_PENDING)
+            .values('project_id', 'project__title')
+            .annotate(pending_count=models.Count('id'))
+            .order_by('-pending_count')
+        )
+
+        data = {
+            "sent": {
+                "total": sent.count(),
+                "pending": sent.filter(status=MembershipRequest.STATUS_PENDING).count(),
+                "accepted": sent.filter(status=MembershipRequest.STATUS_ACCEPTED).count(),
+                "rejected": sent.filter(status=MembershipRequest.STATUS_REJECTED).count(),
+            },
+            "received": {
+                "total": received.count(),
+                "pending": received.filter(status=MembershipRequest.STATUS_PENDING).count(),
+                "accepted": received.filter(status=MembershipRequest.STATUS_ACCEPTED).count(),
+                "rejected": received.filter(status=MembershipRequest.STATUS_REJECTED).count(),
+            },
+            "projects_to_review": [
+                {
+                    "project_id": item['project_id'],
+                    "project_title": item['project__title'],
+                    "pending_count": item['pending_count'],
+                }
+                for item in by_project
+            ],
+        }
+        return Response(data, status=status.HTTP_200_OK)
