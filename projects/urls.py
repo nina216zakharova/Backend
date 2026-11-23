@@ -5,6 +5,7 @@ from .views import (
     MyProjectsView,
     ExploreProjectsView,
     ProjectMembersListView,
+    ProjectMemberDetailView,
 )
 
 urlpatterns = [
@@ -13,4 +14,5 @@ urlpatterns = [
     path('explore/', ExploreProjectsView.as_view(), name='project-explore'),
     path('<int:pk>/', ProjectDetailView.as_view(), name='project-detail'),
     path('<int:pk>/members/', ProjectMembersListView.as_view(), name='project-members'),
+    path('<int:pk>/members/<int:user_id>/', ProjectMemberDetailView.as_view(), name='project-member-detail'),
 ]
