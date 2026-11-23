@@ -308,7 +308,189 @@ Each project contains:
 - `description`
 - `creator`
 - `capacity`
+- `remaining_capacity`
 - `status`
 - `skills`
 - `created_at`
 - `updated_at`
+
+---
+
+# 5. Membership Request APIs
+
+## 5.1 Submit Membership Request
+
+**Endpoint:** `POST /api/applications/requests/`
+
+**Authentication:** Required.
+
+Submits a membership request to join a project.
+
+**Request Body:**
+
+```json
+{
+  "project": 1,
+  "message": "Hi, I have strong experience in Python and would love to collaborate."
+}
+```
+
+Fields:
+- `project`: Required. ID of the target project.
+- `message`: Optional. Application note or message to the project creator.
+
+**Success Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "project": 1,
+  "message": "Hi, I have strong experience in Python and would love to collaborate.",
+  "status": "pending",
+  "applicant_username": "applicant_user",
+  "created_at": "2026-11-23T10:00:00Z"
+}
+```
+
+**Validation & Error Responses:** `400 Bad Request`
+- Target project must be open (`status == 'open'`).
+- Creators cannot apply to their own projects.
+- Existing project members cannot apply again.
+- Duplicate pending requests are rejected.
+- Projects with full capacity reject new requests.
+
+## 5.2 List Membership Requests
+
+**Endpoint:** `GET /api/applications/requests/`
+
+**Authentication:** Required.
+
+Returns requests relevant to the authenticated user (requests sent by the user as applicant, and requests received for projects owned by the user).
+
+**Optional Query Parameters:**
+- `?project=1`: Filter requests for a specific project.
+- `?status=pending`: Filter by status (`pending`, `accepted`, `rejected`).
+- `?role=applicant`: Return only requests sent by the user.
+- `?role=creator`: Return only requests received on user's projects.
+
+**Success Response:** `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "project": 1,
+    "project_title": "AI Skill Matcher Platform",
+    "user": 2,
+    "applicant_username": "applicant_user",
+    "applicant_email": "applicant@example.com",
+    "status": "pending",
+    "message": "Hi, I have strong experience in Python...",
+    "created_at": "2026-11-23T10:00:00Z",
+    "updated_at": "2026-11-23T10:00:00Z"
+  }
+]
+```
+
+## 5.3 Get Membership Request Details
+
+**Endpoint:** `GET /api/applications/requests/{id}/`
+
+**Authentication:** Required (Applicant or Project Creator).
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "id": 1,
+  "project": 1,
+  "project_title": "AI Skill Matcher Platform",
+  "user": 2,
+  "applicant_username": "applicant_user",
+  "applicant_email": "applicant@example.com",
+  "status": "pending",
+  "message": "Hi, I have strong experience in Python...",
+  "created_at": "2026-11-23T10:00:00Z",
+  "updated_at": "2026-11-23T10:00:00Z"
+}
+```
+
+## 5.4 Accept or Reject Membership Request
+
+**Endpoint:** `PATCH /api/applications/requests/{id}/`
+
+**Authentication:** Required (Project Creator only).
+
+Accepts or rejects a pending membership request.
+
+**Request Body (Accept):**
+
+```json
+{
+  "status": "accepted"
+}
+```
+
+**Request Body (Reject):**
+
+```json
+{
+  "status": "rejected"
+}
+```
+
+**Behavior on Accept:**
+- Transactional operation (`transaction.atomic`).
+- Automatically adds the applicant to `ProjectMember`.
+- Decrements project remaining capacity.
+- Automatically closes the project (`status = 'closed'`) if capacity reaches full.
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "status": "accepted"
+}
+```
+
+**Validation & Error Responses:**
+- `400 Bad Request`: If status is not `accepted` or `rejected`, or if request is already finalized, or if capacity is full.
+- `403 Forbidden`: If user is not the project creator.
+
+## 5.5 Withdraw Membership Request
+
+**Endpoint:** `DELETE /api/applications/requests/{id}/`
+
+**Authentication:** Required (Applicant only).
+
+Allows an applicant to cancel and delete their own pending request.
+
+**Success Response:** `204 No Content`
+
+**Error Responses:**
+- `400 Bad Request`: If request has already been accepted or rejected.
+- `403 Forbidden`: If requesting user is not the applicant.
+
+## 5.6 Project Members List
+
+**Endpoint:** `GET /api/projects/{id}/members/`
+
+**Authentication:** Optional.
+
+Returns all accepted team members for a given project.
+
+**Success Response:** `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "user": {
+      "id": 2,
+      "username": "applicant_user",
+      "email": "applicant@example.com"
+    },
+    "joined_at": "2026-11-23T10:15:00Z"
+  }
+]
+```
