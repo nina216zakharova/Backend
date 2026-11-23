@@ -27,6 +27,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             'capacity',
             'accepted_count',
             'status',
+            'project_type',
+            'custom_project_type',
             'skills',
             'created_at',
             'updated_at',
@@ -40,6 +42,23 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_accepted_count(self, obj):
         return obj.members.count()
     
+    def validate(self, attrs):
+        project_type = attrs.get(
+            'project_type',
+            getattr(self.instance, 'project_type', '')
+        )
+
+        custom_project_type = attrs.get(
+            'custom_project_type',
+            getattr(self.instance, 'custom_project_type', '')
+        )
+
+        if project_type == 'other' and not custom_project_type.strip():
+            raise serializers.ValidationError({
+                'custom_project_type': 'Please specify your project type.'
+            })
+
+        return attrs
 
 class MyProjectsSerializer(ProjectSerializer):
     role = serializers.SerializerMethodField()

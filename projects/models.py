@@ -37,6 +37,20 @@ class Project(models.Model):
         (STATUS_CLOSED, 'Closed'),
     ]
 
+    PROJECT_TYPE_STARTUP = 'startup'
+    PROJECT_TYPE_LEARNING = 'learning'
+    PROJECT_TYPE_RESEARCH = 'research'
+    PROJECT_TYPE_PERSONAL = 'personal'
+    PROJECT_TYPE_OTHER = 'other'
+
+    PROJECT_TYPE_CHOICES = [
+        (PROJECT_TYPE_STARTUP, 'Startup'),
+        (PROJECT_TYPE_LEARNING, 'Learning'),
+        (PROJECT_TYPE_RESEARCH, 'Research'),
+        (PROJECT_TYPE_PERSONAL, 'Personal'),
+        (PROJECT_TYPE_OTHER, 'Other'),
+    ]
+
     title = models.CharField(max_length=255, verbose_name="Project Title")
     goal = models.TextField(verbose_name="Project Goal")
     description = models.TextField(blank=True, verbose_name="Project Description")
@@ -56,6 +70,18 @@ class Project(models.Model):
         choices=STATUS_CHOICES,
         default=STATUS_OPEN,
         verbose_name="Project Status",
+    )
+    project_type = models.CharField(
+        max_length=20,
+        choices=PROJECT_TYPE_CHOICES,
+        blank=True,
+        verbose_name="Project Type",
+    )
+    custom_project_type = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name="Custom Project Type",
     )
     skills = models.ManyToManyField(
         Skill,
