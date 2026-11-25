@@ -1,5 +1,6 @@
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.authtoken.models import Token
