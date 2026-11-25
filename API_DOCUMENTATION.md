@@ -639,3 +639,233 @@ Allows a project creator to remove an accepted member from their team, or allows
 - `403 Forbidden`: If the user is neither the project creator nor the member themselves.
 - `404 Not Found`: If the project or member does not exist.
 
+---
+
+# 6. Partner Explore & User Profile APIs
+
+## 6.1 Partner & Mentor Explore / Discovery
+
+**Endpoint:** `GET /api/users/explore/` (Alias: `GET /api/users/discover/`)
+
+**Authentication:** Optional (`AllowAny`).
+
+Explore active users open for project collaboration and mentoring with rich multi-field filtering and search. Sensitive details (e.g. private emails, password hashes) are securely omitted.
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `search` | String | Performs text search across full name, headline, bio, username, and skill names. |
+| `skill` | String / Integer | Filters users possessing a specific skill ID or skill name matching the substring. |
+| `collaboration` | Boolean | Pass `true` to filter partners open to collaboration (`open_to_collaboration=true`). |
+| `mentoring` | Boolean | Pass `true` to filter partners open to mentoring (`open_to_mentoring=true`). |
+| `ordering` | String | Sort order: `-created_at`, `name`, `updated_at`. |
+
+### Success Response: `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "user_id": 1,
+    "username": "johndoe",
+    "name": "John Doe",
+    "display_name": "John Doe",
+    "headline": "Senior Full-Stack Developer",
+    "bio": "Passionate about open-source and mentoring junior developers.",
+    "avatar_display": "https://example.com/media/avatars/john.jpg",
+    "skills": [
+      {
+        "id": 1,
+        "name": "Python"
+      },
+      {
+        "id": 3,
+        "name": "Django"
+      }
+    ],
+    "skills_to_teach": [
+      {
+        "id": 1,
+        "name": "Python"
+      }
+    ],
+    "contact_links": [
+      {
+        "telegram": "@johndoe"
+      },
+      {
+        "github": "https://github.com/johndoe"
+      }
+    ],
+    "telegram": "@johndoe",
+    "github": "https://github.com/johndoe",
+    "linkedin": "",
+    "open_to_collaboration": true,
+    "open_for_collaboration": true,
+    "open_to_mentoring": true,
+    "open_for_mentoring": true,
+    "created_at": "2026-11-23T10:00:00Z"
+  }
+]
+```
+
+---
+
+## 6.2 Public User Profile
+
+**Endpoint:** `GET /api/users/{id}/profile/` (Alias: `GET /api/users/{id}/`)
+
+**Authentication:** Optional (`AllowAny`).
+
+Retrieves the public profile of a user, including headline, bio, skills, and approved contact channels.
+
+### Success Response: `200 OK`
+
+```json
+{
+  "id": 2,
+  "user_id": 2,
+  "username": "sarah_connor",
+  "name": "Sarah Connor",
+  "display_name": "Sarah Connor",
+  "headline": "AI & Machine Learning Specialist",
+  "bio": "Deep learning researcher interested in NLP and computer vision.",
+  "avatar_display": "https://example.com/avatar.jpg",
+  "skills": [
+    {
+      "id": 5,
+      "name": "PyTorch"
+    }
+  ],
+  "contact_links": [
+    {
+      "linkedin": "https://linkedin.com/in/sarah-connor"
+    }
+  ],
+  "open_to_collaboration": true,
+  "open_to_mentoring": false,
+  "created_at": "2026-11-20T14:30:00Z"
+}
+```
+
+### Error Responses
+
+- `404 Not Found`: If the user does not exist or has been deactivated.
+
+---
+
+## 6.3 Self Profile Management
+
+**Endpoint:** `GET /api/users/profile/` | `PUT /api/users/profile/` | `PATCH /api/users/profile/`
+
+**Authentication:** Required (`Token <token>`).
+
+Inspect and update the authenticated user's profile settings.
+
+### Request Body (Partial or Full Update)
+
+```json
+{
+  "name": "John Doe",
+  "headline": "Full-Stack Engineer & Mentor",
+  "bio": "Experienced builder with Django & React.",
+  "skills": [1, 2, 4],
+  "skills_names": ["Python", "FastAPI"],
+  "contact_links": [
+    {
+      "telegram": "@johndoe"
+    },
+    {
+      "github": "https://github.com/johndoe"
+    }
+  ],
+  "open_to_collaboration": true,
+  "open_to_mentoring": true
+}
+```
+
+### Success Response: `200 OK`
+
+```json
+{
+  "id": 1,
+  "username": "johndoe",
+  "email": "johndoe@example.com",
+  "name": "John Doe",
+  "display_name": "John Doe",
+  "headline": "Full-Stack Engineer & Mentor",
+  "bio": "Experienced builder with Django & React.",
+  "avatar_display": "https://example.com/media/avatars/john.jpg",
+  "skills": [1, 2, 4],
+  "skills_detail": [
+    {
+      "id": 1,
+      "name": "Python"
+    },
+    {
+      "id": 2,
+      "name": "FastAPI"
+    }
+  ],
+  "contact_links": [
+    {
+      "telegram": "@johndoe"
+    },
+    {
+      "github": "https://github.com/johndoe"
+    }
+  ],
+  "open_to_collaboration": true,
+  "open_to_mentoring": true,
+  "created_at": "2026-11-23T10:00:00Z",
+  "updated_at": "2026-11-23T12:00:00Z"
+}
+```
+
+### Error Responses
+
+- `400 Bad Request`: If contact link URLs or formats fail validation.
+- `401 Unauthorized`: If the request lacks authentication.
+
+---
+
+## 6.4 Profile Completion Score
+
+**Endpoint:** `GET /api/users/profile/completion/`
+
+**Authentication:** Required (`Token <token>`).
+
+Calculates the percentage of profile completeness (out of 100%) to guide users and display progress indicators in the frontend.
+
+### Weighted Criteria (20% each)
+1. Full Name (`name`)
+2. Professional Headline (`headline`)
+3. Bio / About (`bio`)
+4. Avatar (`avatar` / `avatar_url` / Google picture)
+5. Assigned Skills (`skills`)
+
+### Success Response: `200 OK`
+
+```json
+{
+  "completion_percentage": 80,
+  "is_complete": false,
+  "missing_fields": [
+    "avatar"
+  ],
+  "breakdown": {
+    "name": true,
+    "headline": true,
+    "bio": true,
+    "avatar": false,
+    "skills": true
+  }
+}
+```
+
+### Error Responses
+
+- `401 Unauthorized`: If the request lacks authentication.
+
+

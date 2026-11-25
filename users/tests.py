@@ -3,7 +3,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.authtoken.models import Token
-from users.models import GoogleProfile
+from projects.models import Skill
+from users.models import GoogleProfile, Profile
 
 User = get_user_model()
 
@@ -180,3 +181,354 @@ class GoogleAuthTests(TestCase):
         response = self.client.get("/api/users/google/callback/?error=access_denied")
         self.assertEqual(response.status_code, 302)
         self.assertIn("error=access_denied", response.url)
+
+
+class PartnerExploreTests(TestCase):
+    def setUp(self):
+        self.skill_python = Skill.objects.create(name="Python")
+        self.skill_react = Skill.objects.create(name="React")
+        self.skill_django = Skill.objects.create(name="Django")
+
+        # User 1: Python mentor and collaborator
+        self.user1 = User.objects.create_user(
+            username="user_mentor",
+            email="mentor@example.com",
+            password="password123",
+        )
+        self.profile1, _ = Profile.objects.get_or_create(user=self.user1)
+        self.profile1.name = "John Mentor"
+        self.profile1.headline = "Senior Python Architect"
+        self.profile1.bio = "Passionate about backend architectures and mentoring."
+        self.profile1.open_to_collaboration = True
+        self.profile1.open_to_mentoring = True
+        self.profile1.contact_links = [{"telegram": "@johnmentor"}]
+        self.profile1.save()
+        self.profile1.skills.set([self.skill_python, self.skill_django])
+
+        # User 2: React frontend collaborator, not a mentor
+        self.user2 = User.objects.create_user(
+            username="user_dev",
+            email="dev@example.com",
+            password="password123",
+        )
+        self.profile2, _ = Profile.objects.get_or_create(user=self.user2)
+        self.profile2.name = "Sara Developer"
+        self.profile2.headline = "Frontend React Specialist"
+        self.profile2.bio = "Building responsive interfaces."
+        self.profile2.open_to_collaboration = True
+        self.profile2.open_to_mentoring = False
+        self.profile2.save()
+        self.profile2.skills.set([self.skill_react])
+
+        # User 3: Inactive user
+        self.user_inactive = User.objects.create_user(
+            username="inactive_user",
+            email="inactive@example.com",
+            password="password123",
+            is_active=False,
+        )
+        self.profile_inactive, _ = Profile.objects.get_or_create(user=self.user_inactive)
+        self.profile_inactive.name = "Inactive Person"
+        self.profile_inactive.save()
+
+    def test_explore_list_returns_active_users(self):
+        response = self.client.get("/api/users/explore/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 2)
+        usernames = [item["username"] for item in data]
+        self.assertIn("user_mentor", usernames)
+        self.assertIn("user_dev", usernames)
+        self.assertNotIn("inactive_user", usernames)
+
+    def test_explore_filter_by_skill_name(self):
+        response = self.client.get("/api/users/explore/?skill=Python")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["username"], "user_mentor")
+
+    def test_explore_filter_by_skill_id(self):
+        response = self.client.get(f"/api/users/explore/?skill={self.skill_react.id}")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["username"], "user_dev")
+
+    def test_explore_filter_collaboration(self):
+        self.profile2.open_to_collaboration = False
+        self.profile2.save()
+
+        response = self.client.get("/api/users/explore/?collaboration=true")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["username"], "user_mentor")
+
+    def test_explore_filter_mentoring(self):
+        response = self.client.get("/api/users/explore/?mentoring=true")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["username"], "user_mentor")
+
+    def test_explore_search_filter(self):
+        response = self.client.get("/api/users/explore/?search=Senior")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["username"], "user_mentor")
+
+    def test_explore_discover_alias(self):
+        response = self.client.get("/api/users/discover/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 2)
+
+    def test_explore_privacy_no_private_email_exposed(self):
+        response = self.client.get("/api/users/explore/")
+        self.assertEqual(response.status_code, 200)
+        for user_data in response.json():
+            self.assertNotIn("email", user_data)
+            self.assertIn("user_id", user_data)
+            self.assertIn("username", user_data)
+
+
+class PublicProfileDetailTests(TestCase):
+    def setUp(self):
+        self.skill = Skill.objects.create(name="Go")
+        self.user = User.objects.create_user(
+            username="public_test_user",
+            email="secret@example.com",
+            password="password123",
+        )
+        self.profile, _ = Profile.objects.get_or_create(user=self.user)
+        self.profile.name = "Public Person"
+        self.profile.headline = "Cloud Engineer"
+        self.profile.bio = "Building high-performance cloud applications."
+        self.profile.contact_links = [{"github": "https://github.com/publicperson"}]
+        self.profile.save()
+        self.profile.skills.set([self.skill])
+
+    def test_public_profile_detail_success(self):
+        response = self.client.get(f"/api/users/{self.user.id}/profile/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["username"], "public_test_user")
+        self.assertEqual(data["name"], "Public Person")
+        self.assertEqual(data["headline"], "Cloud Engineer")
+        self.assertEqual(data["github"], "https://github.com/publicperson")
+        self.assertEqual(len(data["skills"]), 1)
+        self.assertEqual(data["skills"][0]["name"], "Go")
+        self.assertNotIn("email", data)
+
+    def test_user_detail_endpoint_success(self):
+        response = self.client.get(f"/api/users/{self.user.id}/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["username"], "public_test_user")
+        self.assertIn("profile", data)
+        self.assertEqual(data["profile"]["name"], "Public Person")
+
+    def test_public_profile_inactive_user_404(self):
+        self.user.is_active = False
+        self.user.save()
+        response = self.client.get(f"/api/users/{self.user.id}/profile/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_public_profile_nonexistent_user_404(self):
+        response = self.client.get("/api/users/999999/profile/")
+        self.assertEqual(response.status_code, 404)
+
+
+class MyProfileManageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="myprofile_user",
+            email="myprofile@example.com",
+            password="securePassword123",
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.auth_headers = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+        self.skill1 = Skill.objects.create(name="Django")
+        self.skill2 = Skill.objects.create(name="PostgreSQL")
+
+    def test_get_own_profile_authenticated(self):
+        response = self.client.get("/api/users/profile/", **self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["username"], "myprofile_user")
+        self.assertEqual(data["email"], "myprofile@example.com")
+
+    def test_get_own_profile_unauthenticated_fails(self):
+        response = self.client.get("/api/users/profile/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_patch_own_profile_fields(self):
+        payload = {
+            "name": "Updated Name",
+            "headline": "Full-Stack Web Dev",
+            "bio": "Extensive experience in Django REST framework.",
+            "open_to_collaboration": True,
+            "open_to_mentoring": True,
+        }
+        response = self.client.patch(
+            "/api/users/profile/",
+            payload,
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["name"], "Updated Name")
+        self.assertEqual(data["headline"], "Full-Stack Web Dev")
+        self.assertTrue(data["open_to_collaboration"])
+        self.assertTrue(data["open_to_mentoring"])
+
+        # Verify DB persistence
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.name, "Updated Name")
+
+    def test_update_profile_skills_by_id(self):
+        payload = {
+            "skills": [self.skill1.id, self.skill2.id],
+        }
+        response = self.client.patch(
+            "/api/users/profile/",
+            payload,
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.skills.count(), 2)
+
+    def test_update_profile_skills_by_name(self):
+        payload = {
+            "skills_names": ["Kubernetes", "Docker"],
+        }
+        response = self.client.patch(
+            "/api/users/profile/",
+            payload,
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        profile = Profile.objects.get(user=self.user)
+        skill_names = list(profile.skills.values_list("name", flat=True))
+        self.assertIn("Kubernetes", skill_names)
+        self.assertIn("Docker", skill_names)
+
+    def test_update_profile_valid_contact_links(self):
+        payload = {
+            "contact_links": [
+                {"github": "https://github.com/myprofile"},
+                {"telegram": "@myhandle"},
+                {"email": "reachme@example.com"},
+            ]
+        }
+        response = self.client.patch(
+            "/api/users/profile/",
+            payload,
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["contact_links"]), 3)
+
+    def test_update_profile_invalid_contact_links(self):
+        payload = {
+            "contact_links": [
+                {"invalid_platform": "not-a-valid-url-or-handle"},
+            ]
+        }
+        response = self.client.patch(
+            "/api/users/profile/",
+            payload,
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class CurrentUserAndCompletionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="current_test_user",
+            email="current@example.com",
+            password="password123",
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.auth_headers = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+
+    def test_current_user_me_get_includes_profile(self):
+        response = self.client.get("/api/users/me/", **self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["username"], "current_test_user")
+        self.assertEqual(data["email"], "current@example.com")
+        self.assertIn("profile", data)
+
+    def test_current_user_me_patch(self):
+        payload = {
+            "first_name": "Modern",
+            "last_name": "Dev",
+            "bio": "Working with React and Django.",
+            "telegram": "@moderndev",
+        }
+        response = self.client.patch(
+            "/api/users/me/",
+            payload,
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Modern")
+        self.assertEqual(self.user.last_name, "Dev")
+
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.bio, "Working with React and Django.")
+        self.assertEqual(profile.telegram, "@moderndev")
+
+    def test_profile_completion_unauthenticated_401(self):
+        response = self.client.get("/api/users/profile/completion/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_profile_completion_calculation(self):
+        # Initial empty profile: completion should be 0%
+        response = self.client.get("/api/users/profile/completion/", **self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["completion_percentage"], 0)
+        self.assertFalse(data["is_complete"])
+        self.assertEqual(len(data["missing_fields"]), 5)
+
+        # Update name and headline (+40%)
+        profile = Profile.objects.get(user=self.user)
+        profile.name = "My Full Name"
+        profile.headline = "Software Engineer"
+        profile.save()
+
+        response = self.client.get("/api/users/profile/completion/", **self.auth_headers)
+        self.assertEqual(response.json()["completion_percentage"], 40)
+
+        # Update bio and avatar_url (+40% => 80%)
+        profile.bio = "Detailed bio description."
+        profile.avatar_url = "https://example.com/pic.png"
+        profile.save()
+
+        response = self.client.get("/api/users/profile/completion/", **self.auth_headers)
+        self.assertEqual(response.json()["completion_percentage"], 80)
+
+        # Add skill (+20% => 100%)
+        skill = Skill.objects.create(name="FastAPI")
+        profile.skills.add(skill)
+
+        response = self.client.get("/api/users/profile/completion/", **self.auth_headers)
+        data = response.json()
+        self.assertEqual(data["completion_percentage"], 100)
+        self.assertTrue(data["is_complete"])
+        self.assertEqual(data["missing_fields"], [])

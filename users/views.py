@@ -1,23 +1,30 @@
 import urllib.parse
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponseRedirect
-from rest_framework import status
+from rest_framework import status, generics, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 
+from .models import Profile
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
     UserSerializer,
     GoogleAuthSerializer,
+    PublicPartnerSerializer,
+    UserProfileSerializer,
 )
 from .services import (
     authenticate_google,
     get_google_auth_url,
 )
+
+User = get_user_model()
 
 
 def users_api(request):
@@ -86,13 +93,29 @@ class LoginView(APIView):
 
 class CurrentUserView(APIView):
     """
-    Retrieve safe profile details for the currently authenticated user.
+    Retrieve or update profile details for the currently authenticated user.
     """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        user_data = UserSerializer(request.user).data
+        user_data['profile'] = UserProfileSerializer(profile, context={'request': request}).data
+        return Response(user_data, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        serializer = UserProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LogoutView(APIView):
@@ -143,7 +166,7 @@ class GoogleAuthView(APIView):
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         except AuthenticationFailed as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as exc:
+        except Exception:
             return Response(
                 {"detail": "Authentication failed. Please verify your Google credentials."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -195,3 +218,149 @@ class GoogleCallbackView(APIView):
         except Exception as exc:
             redirect_target = f"{frontend_url}/login?error={urllib.parse.quote(str(exc))}"
             return HttpResponseRedirect(redirect_target)
+
+
+class PartnerExploreView(generics.ListAPIView):
+    """
+    Explore and filter users/partners open for collaboration and mentoring.
+    Supports query parameters:
+      - search: text search across username, name, headline, bio, skills
+      - skill: filter by skill ID or skill name
+      - collaboration: filter by open_to_collaboration (true/false)
+      - mentoring: filter by open_to_mentoring (true/false)
+      - ordering: created_at, name, updated_at
+    """
+    permission_classes = [AllowAny]
+    serializer_class = PublicPartnerSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'headline', 'bio', 'user__username', 'skills__name']
+    ordering_fields = ['created_at', 'name', 'updated_at']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = (
+            Profile.objects
+            .select_related('user')
+            .prefetch_related('skills')
+            .filter(user__is_active=True)
+        )
+
+        # Skill filtering (by id or name substring)
+        skill_param = self.request.query_params.get('skill')
+        if skill_param:
+            skill_clean = skill_param.strip()
+            if skill_clean.isdigit():
+                queryset = queryset.filter(skills__id=int(skill_clean))
+            else:
+                queryset = queryset.filter(skills__name__icontains=skill_clean)
+
+        # Collaboration filter
+        collab_param = (
+            self.request.query_params.get('collaboration') or
+            self.request.query_params.get('open_to_collaboration')
+        )
+        if collab_param is not None:
+            is_collab = str(collab_param).lower() in ['true', '1', 'yes']
+            queryset = queryset.filter(open_to_collaboration=is_collab)
+
+        # Mentoring filter
+        mentor_param = (
+            self.request.query_params.get('mentoring') or
+            self.request.query_params.get('open_to_mentoring')
+        )
+        if mentor_param is not None:
+            is_mentor = str(mentor_param).lower() in ['true', '1', 'yes']
+            queryset = queryset.filter(open_to_mentoring=is_mentor)
+
+        return queryset.distinct()
+
+
+class PublicProfileDetailView(generics.RetrieveAPIView):
+    """
+    Retrieve public profile information for a user by their user ID.
+    Omit sensitive private data (email, password).
+    """
+    permission_classes = [AllowAny]
+    serializer_class = PublicPartnerSerializer
+
+    def get_object(self):
+        pk = self.kwargs.get('pk')
+        user = generics.get_object_or_404(User, id=pk, is_active=True)
+        profile, _ = Profile.objects.get_or_create(user=user)
+        return profile
+
+
+class UserDetailView(generics.RetrieveAPIView):
+    """
+    Retrieve public details and profile for a specific user ID.
+    Supports frontend client profile lookups (/api/users/<id>/).
+    """
+    permission_classes = [AllowAny]
+    serializer_class = PublicPartnerSerializer
+
+    def get_object(self):
+        pk = self.kwargs.get('pk')
+        user = generics.get_object_or_404(User, id=pk, is_active=True)
+        profile, _ = Profile.objects.get_or_create(user=user)
+        return profile
+
+
+class MyProfileView(generics.RetrieveUpdateAPIView):
+    """
+    Retrieve or update the authenticated user's own profile.
+    Supports GET, PUT, and PATCH.
+    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserProfileSerializer
+
+    def get_object(self):
+        profile, _ = Profile.objects.get_or_create(user=self.request.user)
+        return profile
+
+
+class ProfileCompletionView(APIView):
+    """
+    Calculates profile completion percentage and highlights missing fields.
+    Weighted criteria (20% each):
+      1. Name
+      2. Headline
+      3. Bio
+      4. Avatar (uploaded or Google OAuth profile picture)
+      5. Skills (at least one assigned)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+
+        has_name = bool(profile.name and profile.name.strip())
+        has_headline = bool(profile.headline and profile.headline.strip())
+        has_bio = bool(profile.bio and profile.bio.strip())
+        has_avatar = bool(
+            profile.avatar or
+            profile.avatar_url or
+            (hasattr(request.user, 'google_profile') and request.user.google_profile.picture)
+        )
+        has_skills = profile.skills.exists()
+
+        breakdown = {
+            'name': has_name,
+            'headline': has_headline,
+            'bio': has_bio,
+            'avatar': has_avatar,
+            'skills': has_skills,
+        }
+
+        score = sum(20 for val in breakdown.values() if val)
+        missing_fields = [field for field, completed in breakdown.items() if not completed]
+
+        return Response(
+            {
+                'completion_percentage': score,
+                'is_complete': score == 100,
+                'missing_fields': missing_fields,
+                'breakdown': breakdown,
+            },
+            status=status.HTTP_200_OK,
+        )
