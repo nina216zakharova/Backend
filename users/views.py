@@ -18,13 +18,21 @@ from .serializers import (
     GoogleAuthSerializer,
     PublicPartnerSerializer,
     UserProfileSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetValidateSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordChangeSerializer,
 )
 from .services import (
     authenticate_google,
     get_google_auth_url,
+    verify_password_reset_token,
+    send_password_reset_email,
+    reset_user_password,
 )
 
 User = get_user_model()
+
 
 
 def users_api(request):
@@ -361,6 +369,144 @@ class ProfileCompletionView(APIView):
                 'is_complete': score == 100,
                 'missing_fields': missing_fields,
                 'breakdown': breakdown,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordResetRequestView(APIView):
+    """
+    Request password reset link sent to user's registered email.
+    Always returns 200 OK to prevent account enumeration.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email']
+        redirect_url = serializer.validated_data.get('redirect_url')
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user:
+            send_password_reset_email(user, redirect_url=redirect_url)
+
+        return Response(
+            {
+                "message": "If an account with this email exists, a password reset link has been sent.",
+                "status": "success",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordResetValidateView(APIView):
+    """
+    Validate password reset token and UID before presenting reset password form.
+    Supports GET (query parameters) and POST (JSON body).
+    """
+    permission_classes = [AllowAny]
+
+    def _validate_token(self, data):
+        serializer = PasswordResetValidateSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        uid = serializer.validated_data['uid']
+        token = serializer.validated_data['token']
+
+        user, is_valid = verify_password_reset_token(uid, token)
+        if not is_valid:
+            return Response(
+                {
+                    "valid": False,
+                    "message": "The password reset link is invalid or has expired.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "valid": True,
+                "uid": uid,
+                "username": user.username,
+                "message": "Token is valid.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def get(self, request):
+        return self._validate_token(request.query_params)
+
+    def post(self, request):
+        return self._validate_token(request.data)
+
+
+class PasswordResetConfirmView(APIView):
+    """
+    Reset user password using valid token and UID.
+    Invalidates prior sessions and provides a new authentication token.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        uid = serializer.validated_data['uid']
+        token = serializer.validated_data['token']
+        new_password = serializer.validated_data['new_password']
+
+        user, is_valid = verify_password_reset_token(uid, token)
+        if not is_valid:
+            return Response(
+                {"detail": "The password reset link is invalid or has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reset_user_password(user, new_password)
+        token_obj, _ = Token.objects.get_or_create(user=user)
+
+        return Response(
+            {
+                "message": "Password has been successfully reset. You can now log in with your new password.",
+                "token": token_obj.key,
+                "status": "success",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordChangeView(APIView):
+    """
+    Change password for currently authenticated user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        old_password = serializer.validated_data['old_password']
+        new_password = serializer.validated_data['new_password']
+
+        if not request.user.check_password(old_password):
+            return Response(
+                {"old_password": ["Current password is incorrect."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request.user.set_password(new_password)
+        request.user.save()
+
+        return Response(
+            {
+                "message": "Password changed successfully.",
+                "status": "success",
             },
             status=status.HTTP_200_OK,
         )

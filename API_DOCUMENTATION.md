@@ -210,7 +210,186 @@ Handles the redirect from Google with `?code=...` and forwards the user to the f
 
 `http://localhost:5173/login?token=YOUR_AUTH_TOKEN&email=user@example.com&username=user_name`
 
-## 3.6 API Health Check
+## 3.6 Password Reset Request
+
+**Endpoint:** `POST /api/users/password-reset/`
+
+**Authentication:** Not required.
+
+Initiates a password reset request by sending a secure one-time reset link to the user's email address. To prevent account enumeration, this endpoint always returns `200 OK` regardless of whether the email address exists in the system.
+
+**Request Body:**
+
+```json
+{
+  "email": "user@example.com",
+  "redirect_url": "http://localhost:5173/reset-password"
+}
+```
+
+- `email` (Required): The email of the account to reset.
+- `redirect_url` (Optional): Custom frontend URL where the user will be directed. If omitted, defaults to `${FRONTEND_URL}/reset-password`.
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "message": "If an account with this email exists, a password reset link has been sent.",
+  "status": "success"
+}
+```
+
+**Email Sent to User:**
+Contains a reset link formatted as:
+`http://localhost:5173/reset-password?uid={uidb64}&token={token}`
+Link is valid for 24 hours.
+
+**Error Response:** `400 Bad Request` (e.g. invalid email format)
+
+```json
+{
+  "email": ["Enter a valid email address."]
+}
+```
+
+---
+
+## 3.7 Password Reset Token Validation
+
+**Endpoint:** `POST /api/users/password-reset/validate/` or `GET /api/users/password-reset/validate/?uid={uid}&token={token}`
+
+**Authentication:** Not required.
+
+Allows the frontend application to verify the validity and expiration of the reset token before displaying the new password input form to the user.
+
+**Request Body (POST):**
+
+```json
+{
+  "uid": "MQ",
+  "token": "d7s12a-438902d8f92134e7f8"
+}
+```
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "valid": true,
+  "uid": "MQ",
+  "username": "testuser",
+  "message": "Token is valid."
+}
+```
+
+**Error Response:** `400 Bad Request`
+
+```json
+{
+  "valid": false,
+  "message": "The password reset link is invalid or has expired."
+}
+```
+
+---
+
+## 3.8 Password Reset Confirm
+
+**Endpoint:** `POST /api/users/password-reset/confirm/`
+
+**Authentication:** Not required.
+
+Applies the new password to the account using the verified token and UID. Upon success, any previous authentication tokens for the user are invalidated and a fresh token is issued.
+
+**Request Body:**
+
+```json
+{
+  "uid": "MQ",
+  "token": "d7s12a-438902d8f92134e7f8",
+  "new_password": "NewSecurePassword123",
+  "confirm_password": "NewSecurePassword123"
+}
+```
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "message": "Password has been successfully reset. You can now log in with your new password.",
+  "token": "NEW_AUTH_TOKEN_KEY",
+  "status": "success"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` (Token invalid or expired):
+  ```json
+  {
+    "detail": "The password reset link is invalid or has expired."
+  }
+  ```
+- `400 Bad Request` (Passwords do not match):
+  ```json
+  {
+    "confirm_password": ["Passwords do not match."]
+  }
+  ```
+- `400 Bad Request` (Password shorter than 8 characters):
+  ```json
+  {
+    "new_password": ["Ensure this field has at least 8 characters."]
+  }
+  ```
+
+---
+
+## 3.9 Password Change (Authenticated)
+
+**Endpoint:** `POST /api/users/password-change/`
+
+**Authentication:** Required (`Token <token>`).
+
+Allows an authenticated user to change their existing password by providing their current password and a new password.
+
+**Request Body:**
+
+```json
+{
+  "old_password": "CurrentPassword123",
+  "new_password": "UpdatedPassword456",
+  "confirm_password": "UpdatedPassword456"
+}
+```
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "message": "Password changed successfully.",
+  "status": "success"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` (Wrong current password):
+  ```json
+  {
+    "old_password": ["Current password is incorrect."]
+  }
+  ```
+- `400 Bad Request` (Confirmation mismatch):
+  ```json
+  {
+    "confirm_password": ["Passwords do not match."]
+  }
+  ```
+- `401 Unauthorized`: If the request lacks authentication.
+
+---
+
+## 3.10 API Health Check
+
 
 **Endpoint:** `GET /api/users/`
 
